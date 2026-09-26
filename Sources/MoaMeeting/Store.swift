@@ -27,7 +27,9 @@ final class MeetingStore: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     var providerName: String { aiProvider == "claude" ? "Claude" : "Codex" }
     var aiReady: Bool { aiProvider == "claude" ? claudeReady : codexReady }
-    @Published var autoSummarize = true
+    @Published var autoSummarize = UserDefaults.standard.object(forKey: "autoSummarize") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoSummarize, forKey: "autoSummarize") }
+    }
     @Published var language = "ko"
     @Published var speakerCount = -1
     let isDemo = ProcessInfo.processInfo.arguments.contains("--demo")
