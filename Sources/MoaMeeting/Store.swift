@@ -50,7 +50,7 @@ final class MeetingStore: NSObject, ObservableObject, AVAudioRecorderDelegate {
         try? FileManager.default.createDirectory(at: root.appendingPathComponent("meetings"), withIntermediateDirectories: true)
         loadMeetings()
         clock = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.playbackTime = self.player?.currentTime ?? 0
                 self.isPlaying = self.player?.isPlaying ?? false
@@ -163,7 +163,7 @@ final class MeetingStore: NSObject, ObservableObject, AVAudioRecorderDelegate {
             recorder = r; recorderID = m.id; recording = true; recordSeconds = 0
             meetings.insert(m, at: 0); selection = m.id
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     guard let self, let r = self.recorder else { return }
                     r.updateMeters(); self.level = max(0, min(1, (r.averagePower(forChannel: 0)+55)/55))
                     self.recordSeconds = r.currentTime
@@ -243,7 +243,7 @@ final class MeetingStore: NSObject, ObservableObject, AVAudioRecorderDelegate {
             p.standardOutput = handle; p.standardError = handle
             p.terminationHandler = { [weak self] process in
                 try? handle.close()
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.jobTimer?.invalidate(); self.jobTimer = nil
                     self.busy = false; self.jobProcess = nil; self.jobMeetingID = nil; self.jobFolder = nil
@@ -261,7 +261,7 @@ final class MeetingStore: NSObject, ObservableObject, AVAudioRecorderDelegate {
             busy = true; jobProcess = p; jobMeetingID = id; jobCancelled = false; jobFolder = job
             jobMessage = "분석 준비 중"; jobProgress = 0.01
             jobTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     guard let self, let data = try? Data(contentsOf: job.appendingPathComponent("status.json")), let status = try? JSONDecoder().decode(JobStatus.self, from: data) else { return }
                     self.jobMessage = status.message; self.jobProgress = status.progress
                 }
