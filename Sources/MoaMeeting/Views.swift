@@ -391,7 +391,7 @@ struct SettingsView: View {
             GroupBox {
                 VStack(alignment:.leading,spacing:12) {
                     Label(store.codexReady ? "ChatGPT 구독 연결됨" : "ChatGPT 로그인 필요", systemImage:store.codexReady ? "checkmark.circle.fill" : "circle").foregroundStyle(store.codexReady ? .green : .secondary)
-                    Label(store.claudeReady ? "Claude Code · \(store.claudeAuthLabel)" : "Claude Code 로그인 필요", systemImage:store.claudeReady ? "checkmark.circle.fill" : "circle").foregroundStyle(store.claudeReady ? .green : .secondary)
+                    Label(store.claudeReady ? (store.claudeAuthLabel == "개인 구독" ? "Claude 구독 연결됨" : "Claude API / 외부 제공자 연결됨") : "Claude 로그인 필요", systemImage:store.claudeReady ? "checkmark.circle.fill" : "circle").foregroundStyle(store.claudeReady ? .green : .secondary)
                     Text("이 Mac에 로그인된 Codex 또는 Claude Code를 사용합니다. 선택한 CLI의 인증 설정으로 처리합니다. Claude Code에 API 키를 설정했다면 API 요금이 적용됩니다.").font(.system(size:12)).fixedSize(horizontal:false,vertical:true)
                     Text("로그인: codex login / claude auth login").font(.system(size:11)).foregroundStyle(.secondary).textSelection(.enabled)
                     Button(store.checkingConnections ? "확인 중…" : "연결 새로고침") { store.checkConnections() }.disabled(store.checkingConnections)
