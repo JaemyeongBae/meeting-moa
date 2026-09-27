@@ -246,13 +246,17 @@ struct MeetingDetail: View {
     private var transcript: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                ForEach(meeting.speakers.keys.sorted(),id:\.self) { key in
-                    Button { renameKey = key; renameValue = meeting.speakers[key] ?? "" } label: {
-                        HStack(spacing: 5) { Circle().fill(speakerColor(key)).frame(width:6,height:6); Text(meeting.speakers[key] ?? key); Image(systemName:"pencil").font(.system(size:8)) }
-                            .font(.system(size:10)).padding(.horizontal,10).padding(.vertical,7).background(.white, in:Capsule())
-                    }.buttonStyle(.plain).disabled(store.busy)
+                // 화자가 많아도 창 너비를 밀어내지 않도록 가로 스크롤로 둔다.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(meeting.speakers.keys.sorted(),id:\.self) { key in
+                            Button { renameKey = key; renameValue = meeting.speakers[key] ?? "" } label: {
+                                HStack(spacing: 5) { Circle().fill(speakerColor(key)).frame(width:6,height:6); Text(meeting.speakers[key] ?? key); Image(systemName:"pencil").font(.system(size:8)) }
+                                    .font(.system(size:10)).padding(.horizontal,10).padding(.vertical,7).background(.white, in:Capsule())
+                            }.buttonStyle(.plain).disabled(store.busy)
+                        }
+                    }
                 }
-                Spacer()
                 TextField("대화록 검색", text:$transcriptSearch).textFieldStyle(.roundedBorder).frame(width:145).font(.system(size:11))
             }.padding(.vertical, 18)
             ScrollView {
@@ -273,6 +277,8 @@ struct MeetingDetail: View {
             HStack {
                 Text("시각을 누르면 원문을 재생합니다 · 발화자 구분은 수정할 수 있어요").font(.system(size:9)).foregroundStyle(muted)
                 Spacer()
+                Picker("화자", selection: $store.speakerCount) { Text("화자 자동").tag(-1); ForEach(1...8,id:\.self) { Text("화자 \($0)명").tag($0) } }
+                    .labelsHidden().frame(width:100).font(.system(size:10)).disabled(store.busy || store.recording)
                 Button("다시 분석") { store.analyze(id) }.font(.system(size:10)).buttonStyle(.plain).foregroundStyle(muted).disabled(store.busy || store.recording)
             }.padding(.vertical,12)
         }

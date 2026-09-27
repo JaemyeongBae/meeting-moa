@@ -86,6 +86,46 @@ def align_segments(transcription, turns, duration):
     for s in result: s['text'] = s['text'].strip()
     return result
 
+def merge_speakers(turns, samples, sr, extractor, merge=.7, min_share=.01, min_seconds=10.):
+    """Fold the fragments that automatic clustering leaves on long recordings.
+
+    Clusters whose voice centroids are similar are merged, then clusters that
+    speak less than max(min_seconds, min_share of speech) are reassigned to the
+    closest remaining voice. Turns are dicts with start, end and speaker."""
+    import numpy as np
+    def embed(t):
+        stream = extractor.create_stream()
+        stream.accept_waveform(sr, samples[int(t['start']*sr):int(min(t['end'], t['start']+15)*sr)])
+        stream.input_finished()
+        v = np.array(extractor.compute(stream)); return v/np.linalg.norm(v)
+    vectors = {i: embed(t) for i, t in enumerate(turns) if t['end']-t['start'] >= 1}
+    labels = [t['speaker'] for t in turns]
+    while True:
+        seconds, sums = {}, {}
+        for i, t in enumerate(turns):
+            d = t['end']-t['start']; seconds[labels[i]] = seconds.get(labels[i], 0)+d
+            if i in vectors: sums[labels[i]] = sums.get(labels[i], 0)+vectors[i]*d
+        centroid = {k: v/np.linalg.norm(v) for k, v in sums.items()}
+        keys, best = list(centroid), (merge, None)
+        for a in range(len(keys)):
+            for b in range(a+1, len(keys)):
+                similarity = float(centroid[keys[a]] @ centroid[keys[b]])
+                if similarity >= best[0]: best = (similarity, (keys[a], keys[b]))
+        if not best[1]: break
+        a, b = best[1]
+        keep, drop = (a, b) if seconds[a] >= seconds[b] else (b, a)
+        labels = [keep if l == drop else l for l in labels]
+    floor = max(min_seconds, min_share*sum(seconds.values()))
+    major = [k for k in centroid if seconds[k] >= floor] or [max(centroid, key=seconds.get)] if centroid else []
+    if not major: return turns
+    for i in range(len(turns)):
+        if labels[i] in major: continue
+        v = vectors.get(i, centroid.get(labels[i]))
+        labels[i] = max(major, key=lambda k: float(centroid[k] @ v)) if v is not None else None
+    for i in range(len(labels)):  # no audio long enough to embed: keep the previous voice
+        if labels[i] is None: labels[i] = labels[i-1] if i else next((l for l in labels if l is not None), major[0])
+    return [dict(t, speaker=labels[i]) for i, t in enumerate(turns)]
+
 def transcribe(request, progress):
     import sherpa_onnx, soundfile as sf
     audio = Path(request['audio'])
@@ -105,7 +145,7 @@ def transcribe(request, progress):
                 pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(MODELS/'segmentation.onnx')),
                 num_threads=4, provider='cpu'),
             embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(MODELS/'embedding.onnx'), num_threads=4, provider='cpu'),
-            clustering=sherpa_onnx.FastClusteringConfig(num_clusters=request.get('speakerCount',-1), threshold=.5),
+            clustering=sherpa_onnx.FastClusteringConfig(num_clusters=request.get('speakerCount',-1), threshold=.8),
             min_duration_on=.3, min_duration_off=.5)
         if not config.validate(): raise RuntimeError('발화자 모델 설정을 확인해주세요.')
         diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
@@ -114,6 +154,10 @@ def transcribe(request, progress):
         turns = [dict(start=float(s.start),end=float(s.end),speaker=f'speaker_{s.speaker+1}')
                  for s in diarizer.process(samples, callback=update).sort_by_start_time()]
         if not turns: raise RuntimeError('음성을 찾지 못했습니다. 마이크와 녹음 볼륨을 확인해주세요.')
+        if request.get('speakerCount',-1) <= 0:
+            progress('발화자 정리 중', .43)
+            extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config.embedding)
+            turns = merge_speakers(turns, samples, sr, extractor)
         progress('한국어 대화록 작성 중', .46)
         output = Path(temp)/'transcript'
         run([binary('whisper-cli'),'-m',str(MODELS/'ggml-large-v3-turbo-q5_0.bin'),'-f',str(wav),
